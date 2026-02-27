@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sync/atomic"
 	"time"
 
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/coder/coder/v2/agent/boundarylogproxy/codec"
@@ -34,6 +34,9 @@ type SocketAuditor struct {
 	batchSize          int
 	batchTimerDuration time.Duration
 	socketPath         string
+
+	droppedChannelFull atomic.Int64
+	droppedBatchFull   atomic.Int64
 
 	// onFlushAttempt is called after each flush attempt (intended for testing).
 	onFlushAttempt func()
@@ -82,6 +85,7 @@ func (s *SocketAuditor) AuditRequest(req Request) {
 	select {
 	case s.logCh <- log:
 	default:
+		s.droppedChannelFull.Add(1)
 		s.logger.Warn("audit log dropped, channel full")
 	}
 }
@@ -101,18 +105,25 @@ func flush(conn net.Conn, logs []*agentproto.BoundaryLog) *flushErr {
 		return nil
 	}
 
-	req := &agentproto.ReportBoundaryLogsRequest{
-		Logs: logs,
+	msg := &codec.BoundaryMessage{
+		Msg: &codec.BoundaryMessage_Logs{
+			Logs: &agentproto.ReportBoundaryLogsRequest{Logs: logs},
+		},
 	}
-
-	data, err := proto.Marshal(req)
-	if err != nil {
-		return &flushErr{err: err, permanent: true}
+	if err := codec.WriteMessage(conn, codec.TagV2, msg); err != nil {
+		return &flushErr{err: fmt.Errorf("write logs: %w", err)}
 	}
+	return nil
+}
 
-	err = codec.WriteFrame(conn, codec.TagV1, data)
-	if err != nil {
-		return &flushErr{err: fmt.Errorf("write frame: %x", err)}
+// flushStatus sends a BoundaryStatus message to the agent reporting
+// accumulated drop counts.
+func flushStatus(conn net.Conn, status *codec.BoundaryStatus) *flushErr {
+	msg := &codec.BoundaryMessage{
+		Msg: &codec.BoundaryMessage_Status{Status: status},
+	}
+	if err := codec.WriteMessage(conn, codec.TagV2, msg); err != nil {
+		return &flushErr{err: fmt.Errorf("write status: %w", err)}
 	}
 	return nil
 }
@@ -197,6 +208,22 @@ func (s *SocketAuditor) Loop(ctx context.Context) {
 		}
 
 		clearBatch()
+
+		// Send drop counts after a successful log flush.
+		chFull := s.droppedChannelFull.Swap(0)
+		bFull := s.droppedBatchFull.Swap(0)
+		if chFull > 0 || bFull > 0 {
+			status := &codec.BoundaryStatus{
+				DroppedChannelFull: chFull,
+				DroppedBatchFull:   bFull,
+			}
+			if err := flushStatus(conn, status); err != nil {
+				// Restore drop counts so they aren't lost.
+				s.droppedChannelFull.Add(chFull)
+				s.droppedBatchFull.Add(bFull)
+				s.logger.Warn("failed to send drop status", "error", err)
+			}
+		}
 	}
 
 	connect()
@@ -227,6 +254,7 @@ func (s *SocketAuditor) Loop(ctx context.Context) {
 			if len(batch) >= s.batchSize {
 				doFlush()
 				if len(batch) >= s.batchSize {
+					s.droppedBatchFull.Add(1)
 					s.logger.Warn("audit log dropped, batch full")
 					continue
 				}

@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/coder/coder/v2/agent/boundarylogproxy/codec"
 	agentproto "github.com/coder/coder/v2/agent/proto"
 )
@@ -89,8 +87,8 @@ func TestSocketAuditor_AuditRequest_DropsWhenFull(t *testing.T) {
 
 	auditor := setupSocketAuditor(t)
 
-	// Fill the channel (capacity is 2*batchSize = 20)
-	for i := 0; i < 2*auditor.batchSize; i++ {
+	// Fill the audit log buffer.
+	for i := 0; i < cap(auditor.logCh); i++ {
 		auditor.AuditRequest(Request{Method: "GET", URL: "https://example.com", Allowed: true})
 	}
 
@@ -98,7 +96,7 @@ func TestSocketAuditor_AuditRequest_DropsWhenFull(t *testing.T) {
 	auditor.AuditRequest(Request{Method: "GET", URL: "https://dropped.com", Allowed: true})
 
 	// Drain the channel and verify all entries are from the original batch (dropped.com was dropped)
-	for i := 0; i < 2*auditor.batchSize; i++ {
+	for i := 0; i < cap(auditor.logCh); i++ {
 		v := <-auditor.logCh
 		resource, ok := v.Resource.(*agentproto.BoundaryLog_HttpRequest_)
 		if !ok {
@@ -122,18 +120,18 @@ func TestSocketAuditor_Loop_FlushesOnBatchSize(t *testing.T) {
 	auditor, serverConn := setupTestAuditor(t)
 	auditor.batchTimerDuration = time.Hour // Ensure timer doesn't interfere with the test
 
-	received := make(chan *agentproto.ReportBoundaryLogsRequest, 1)
-	go readFromConn(t, serverConn, received)
+	cr := newConnReader()
+	go readFromConn(t, serverConn, cr)
 
 	go auditor.Loop(t.Context())
 
 	// Send exactly a full batch of logs to trigger a flush
-	for i := 0; i < auditor.batchSize; i++ {
+	for i := 0; i < cap(auditor.logCh); i++ {
 		auditor.AuditRequest(Request{Method: "GET", URL: "https://example.com", Allowed: true})
 	}
 
 	select {
-	case req := <-received:
+	case req := <-cr.logs:
 		if len(req.Logs) != auditor.batchSize {
 			t.Errorf("expected %d logs, got %d", auditor.batchSize, len(req.Logs))
 		}
@@ -148,8 +146,8 @@ func TestSocketAuditor_Loop_FlushesOnTimer(t *testing.T) {
 	auditor, serverConn := setupTestAuditor(t)
 	auditor.batchTimerDuration = 3 * time.Second
 
-	received := make(chan *agentproto.ReportBoundaryLogsRequest, 1)
-	go readFromConn(t, serverConn, received)
+	cr := newConnReader()
+	go readFromConn(t, serverConn, cr)
 
 	go auditor.Loop(t.Context())
 
@@ -158,7 +156,7 @@ func TestSocketAuditor_Loop_FlushesOnTimer(t *testing.T) {
 
 	// Should flush after the timer duration elapses
 	select {
-	case req := <-received:
+	case req := <-cr.logs:
 		if len(req.Logs) != 1 {
 			t.Errorf("expected 1 log, got %d", len(req.Logs))
 		}
@@ -174,8 +172,8 @@ func TestSocketAuditor_Loop_FlushesOnContextCancel(t *testing.T) {
 	// Make the timer long to always exercise the context cancellation case
 	auditor.batchTimerDuration = time.Hour
 
-	received := make(chan *agentproto.ReportBoundaryLogsRequest, 1)
-	go readFromConn(t, serverConn, received)
+	cr := newConnReader()
+	go readFromConn(t, serverConn, cr)
 
 	ctx, cancel := context.WithCancel(t.Context())
 
@@ -192,7 +190,7 @@ func TestSocketAuditor_Loop_FlushesOnContextCancel(t *testing.T) {
 	cancel()
 
 	select {
-	case req := <-received:
+	case req := <-cr.logs:
 		if len(req.Logs) != 1 {
 			t.Errorf("expected 1 log, got %d", len(req.Logs))
 		}
@@ -243,8 +241,8 @@ func TestSocketAuditor_Loop_RetriesOnConnectionFailure(t *testing.T) {
 		}
 	}
 
-	received := make(chan *agentproto.ReportBoundaryLogsRequest, 1)
-	go readFromConn(t, serverConn, received)
+	cr := newConnReader()
+	go readFromConn(t, serverConn, cr)
 
 	go auditor.Loop(t.Context())
 
@@ -266,7 +264,7 @@ func TestSocketAuditor_Loop_RetriesOnConnectionFailure(t *testing.T) {
 
 	// Should receive the retained batch (the new log goes into a fresh batch)
 	select {
-	case req := <-received:
+	case req := <-cr.logs:
 		if len(req.Logs) != auditor.batchSize {
 			t.Errorf("expected %d logs from retry, got %d", auditor.batchSize, len(req.Logs))
 		}
@@ -281,6 +279,172 @@ func TestSocketAuditor_Loop_RetriesOnConnectionFailure(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timeout waiting for retry flush")
+	}
+}
+
+func TestSocketAuditor_Loop_ReportsChannelFullDrops(t *testing.T) {
+	t.Parallel()
+
+	auditor, serverConn := setupTestAuditor(t)
+	auditor.batchTimerDuration = time.Hour
+
+	cr := newConnReader()
+	go readFromConn(t, serverConn, cr)
+
+	// Fill the channel to capacity before starting the loop so the
+	// drop is deterministic.
+	for i := 0; i < cap(auditor.logCh); i++ {
+		auditor.AuditRequest(Request{Method: "GET", URL: "https://example.com", Allowed: true})
+	}
+
+	// This one should be dropped (channel full).
+	auditor.AuditRequest(Request{Method: "GET", URL: "https://dropped.com", Allowed: true})
+
+	// Start the loop. The drop counter is already set, so the first
+	// successful flush will be followed by a BoundaryStatus message.
+	go auditor.Loop(t.Context())
+
+	// Drain log batches first.
+	for i := 0; i < cap(auditor.logCh)/auditor.batchSize; i++ {
+		select {
+		case <-cr.logs:
+		case <-time.After(5 * time.Second):
+			t.Fatal("timeout waiting for log flush")
+		}
+	}
+
+	// The status message should arrive after the first successful flush.
+	select {
+	case status := <-cr.status:
+		if status.DroppedChannelFull != 1 {
+			t.Errorf("expected DroppedChannelFull=1, got %d", status.DroppedChannelFull)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for BoundaryStatus")
+	}
+}
+
+func TestSocketAuditor_Loop_ReportsBatchFullDrops(t *testing.T) {
+	t.Parallel()
+
+	clientConn, serverConn := net.Pipe()
+	t.Cleanup(func() {
+		_ = clientConn.Close()
+		_ = serverConn.Close()
+	})
+
+	var dialCount atomic.Int32
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	auditor := &SocketAuditor{
+		dial: func() (net.Conn, error) {
+			// First 3 dials fail: initial connect, first doFlush
+			// (batch full), second doFlush (causes batch-full drop).
+			// Dial 4 succeeds and carries the drop status.
+			if dialCount.Add(1) <= 3 {
+				return nil, errors.New("connection refused")
+			}
+			return clientConn, nil
+		},
+		logger:             logger,
+		logCh:              make(chan *agentproto.BoundaryLog, 2*defaultBatchSize),
+		batchSize:          defaultBatchSize,
+		batchTimerDuration: time.Hour,
+	}
+
+	flushed := make(chan struct{}, 4)
+	auditor.onFlushAttempt = func() {
+		select {
+		case flushed <- struct{}{}:
+		default:
+		}
+	}
+
+	cr := newConnReader()
+	go readFromConn(t, serverConn, cr)
+
+	go auditor.Loop(t.Context())
+
+	// Send batchSize+1 logs. The batch fills and doFlush fails (dial 2).
+	// The +1 log triggers another doFlush that also fails (dial 3),
+	// so the log is dropped as batch-full.
+	for i := 0; i < auditor.batchSize+1; i++ {
+		auditor.AuditRequest(Request{Method: "GET", URL: "https://example.com", Allowed: true})
+	}
+
+	// Wait for 2 failed flush attempts.
+	for i := 0; i < 2; i++ {
+		select {
+		case <-flushed:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timeout waiting for flush attempt %d", i+1)
+		}
+	}
+
+	// Send another log to trigger a successful flush (dial 4).
+	auditor.AuditRequest(Request{Method: "GET", URL: "https://retry.com", Allowed: true})
+
+	// The successful flush sends logs first, then a status message.
+	select {
+	case <-cr.logs:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for retry flush")
+	}
+
+	select {
+	case status := <-cr.status:
+		if status.DroppedBatchFull != 1 {
+			t.Errorf("expected DroppedBatchFull=1, got %d", status.DroppedBatchFull)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for BoundaryStatus")
+	}
+}
+
+func TestSocketAuditor_Loop_ShutdownFlushIncludesDrops(t *testing.T) {
+	t.Parallel()
+
+	auditor, serverConn := setupTestAuditor(t)
+	auditor.batchTimerDuration = time.Hour
+
+	cr := newConnReader()
+	go readFromConn(t, serverConn, cr)
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		auditor.Loop(ctx)
+	}()
+
+	// Simulate drops that haven't been flushed yet.
+	auditor.droppedChannelFull.Store(3)
+	auditor.droppedBatchFull.Store(2)
+
+	// Send one log so the shutdown flush has something to send.
+	auditor.AuditRequest(Request{Method: "GET", URL: "https://example.com", Allowed: true})
+
+	cancel()
+	wg.Wait()
+
+	// Shutdown flush sends logs then status.
+	select {
+	case <-cr.logs:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for shutdown flush logs")
+	}
+
+	select {
+	case status := <-cr.status:
+		if status.DroppedChannelFull != 3 {
+			t.Errorf("expected DroppedChannelFull=3, got %d", status.DroppedChannelFull)
+		}
+		if status.DroppedBatchFull != 2 {
+			t.Errorf("expected DroppedBatchFull=2, got %d", status.DroppedBatchFull)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for BoundaryStatus in shutdown flush")
 	}
 }
 
@@ -345,28 +509,45 @@ func setupTestAuditor(t *testing.T) (*SocketAuditor, net.Conn) {
 	return auditor, serverConn
 }
 
-// readFromConn reads length-prefixed protobuf messages from a connection and
-// sends them to the received channel.
-func readFromConn(t *testing.T, conn net.Conn, received chan<- *agentproto.ReportBoundaryLogsRequest) {
+// connReader holds channels for dispatching decoded messages from a
+// boundary socket connection.
+type connReader struct {
+	logs   chan *agentproto.ReportBoundaryLogsRequest
+	status chan *codec.BoundaryStatus
+}
+
+func newConnReader() *connReader {
+	return &connReader{
+		logs:   make(chan *agentproto.ReportBoundaryLogsRequest, 8),
+		status: make(chan *codec.BoundaryStatus, 8),
+	}
+}
+
+// readFromConn reads TagV2 BoundaryMessage envelopes from a connection and
+// dispatches them to the appropriate channel.
+func readFromConn(t *testing.T, conn net.Conn, r *connReader) {
 	t.Helper()
 
 	buf := make([]byte, 1<<10)
 	for {
-		tag, data, err := codec.ReadFrame(conn, buf)
+		msg, newBuf, err := codec.ReadMessage(conn, buf)
 		if err != nil {
 			return // connection closed
 		}
+		buf = newBuf
 
-		if tag != codec.TagV1 {
-			t.Errorf("invalid tag: %d", tag)
+		switch m := msg.(type) {
+		case *codec.BoundaryMessage:
+			switch inner := m.Msg.(type) {
+			case *codec.BoundaryMessage_Logs:
+				r.logs <- inner.Logs
+			case *codec.BoundaryMessage_Status:
+				r.status <- inner.Status
+			default:
+				t.Errorf("unexpected BoundaryMessage variant: %T", inner)
+			}
+		default:
+			t.Errorf("unexpected message type: %T", msg)
 		}
-
-		var req agentproto.ReportBoundaryLogsRequest
-		if err := proto.Unmarshal(data, &req); err != nil {
-			t.Errorf("failed to unmarshal: %v", err)
-			return
-		}
-
-		received <- &req
 	}
 }
