@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coder/coder/v2/agent/boundarylogproxy/codec"
-	agentproto "github.com/coder/coder/v2/agent/proto"
+	"github.com/openagent-md/latticeRuntime/v2/agent/boundarylogproxy/codec"
+	agentproto "github.com/openagent-md/latticeRuntime/v2/agent/proto"
 )
 
 func TestSocketAuditor_AuditRequest_QueuesLog(t *testing.T) {

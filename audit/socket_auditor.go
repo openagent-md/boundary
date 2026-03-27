@@ -10,8 +10,8 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/coder/coder/v2/agent/boundarylogproxy/codec"
-	agentproto "github.com/coder/coder/v2/agent/proto"
+	"github.com/openagent-md/latticeRuntime/v2/agent/boundarylogproxy/codec"
+	agentproto "github.com/openagent-md/latticeRuntime/v2/agent/proto"
 )
 
 const (

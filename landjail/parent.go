@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/coder/boundary/audit"
-	"github.com/coder/boundary/config"
-	"github.com/coder/boundary/rulesengine"
-	"github.com/coder/boundary/tls"
+	"github.com/openagent-md/boundary/audit"
+	"github.com/openagent-md/boundary/config"
+	"github.com/openagent-md/boundary/rulesengine"
+	"github.com/openagent-md/boundary/tls"
 )
 
 func RunParent(ctx context.Context, logger *slog.Logger, config config.AppConfig) error {

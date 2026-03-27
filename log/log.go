@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coder/boundary/config"
+	"github.com/openagent-md/boundary/config"
 )
 
 // SetupLogging creates a slog logger with the specified level

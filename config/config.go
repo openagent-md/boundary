@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/coder/serpent"
+	"github.com/openagent-md/serpent"
 	"github.com/spf13/pflag"
 )
 

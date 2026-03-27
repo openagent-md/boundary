@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/coder/boundary/audit"
+	"github.com/openagent-md/boundary/audit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

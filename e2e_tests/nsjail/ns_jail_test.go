@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coder/boundary/config"
+	"github.com/openagent-md/boundary/config"
 	"github.com/stretchr/testify/require"
 )
 

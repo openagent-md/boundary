@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coder/boundary/e2e_tests/util"
+	"github.com/openagent-md/boundary/e2e_tests/util"
 	"github.com/stretchr/testify/require"
 )
 

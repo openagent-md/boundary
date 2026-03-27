@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os/exec"
 
-	"github.com/coder/boundary/dnsdummy"
+	"github.com/openagent-md/boundary/dnsdummy"
 	"golang.org/x/sys/unix"
 )
 

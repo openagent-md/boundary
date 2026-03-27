@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
-	"github.com/coder/boundary/config"
-	"github.com/coder/boundary/nsjail_manager/nsjail"
+	"github.com/openagent-md/boundary/config"
+	"github.com/openagent-md/boundary/nsjail_manager/nsjail"
 	"golang.org/x/sys/unix"
 )
 

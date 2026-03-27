@@ -6,8 +6,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/coder/boundary/config"
-	"github.com/coder/boundary/util"
+	"github.com/openagent-md/boundary/config"
+	"github.com/openagent-md/boundary/util"
 	"github.com/landlock-lsm/go-landlock/landlock"
 )
 

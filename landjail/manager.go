@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/coder/boundary/audit"
-	"github.com/coder/boundary/config"
-	"github.com/coder/boundary/proxy"
-	"github.com/coder/boundary/rulesengine"
+	"github.com/openagent-md/boundary/audit"
+	"github.com/openagent-md/boundary/config"
+	"github.com/openagent-md/boundary/proxy"
+	"github.com/openagent-md/boundary/rulesengine"
 )
 
 type LandJail struct {

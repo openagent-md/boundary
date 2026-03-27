@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"runtime"
 
-	"github.com/coder/boundary/config"
+	"github.com/openagent-md/boundary/config"
 )
 
 func Run(ctx context.Context, logger *slog.Logger, cfg config.AppConfig) error {

@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coder/boundary/audit"
-	"github.com/coder/boundary/rulesengine"
-	boundary_tls "github.com/coder/boundary/tls"
+	"github.com/openagent-md/boundary/audit"
+	"github.com/openagent-md/boundary/rulesengine"
+	boundary_tls "github.com/openagent-md/boundary/tls"
 	"github.com/stretchr/testify/require"
 )
 

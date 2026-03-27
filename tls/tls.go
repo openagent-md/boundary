@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coder/boundary/config"
+	"github.com/openagent-md/boundary/config"
 )
 
 type Manager interface {

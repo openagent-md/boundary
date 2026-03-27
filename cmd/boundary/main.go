@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/coder/boundary/cli"
+	"github.com/openagent-md/boundary/cli"
 )
 
 // Version information injected at build time

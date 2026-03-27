@@ -1,11 +1,11 @@
-module github.com/coder/boundary
+module github.com/openagent-md/boundary
 
 go 1.25.7
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3
-	github.com/coder/coder/v2 v2.10.1-0.20260303212958-f758443f44ac
-	github.com/coder/serpent v0.14.0
+	github.com/openagent-md/latticeRuntime/v2 v2.10.1-0.20260303212958-f758443f44ac
+	github.com/openagent-md/serpent v0.14.0
 	github.com/landlock-lsm/go-landlock v0.0.0-20251103212306-430f8e5cd97c
 	github.com/miekg/dns v1.1.72
 	github.com/spf13/pflag v1.0.10
@@ -19,7 +19,7 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/coder/pretty v0.0.0-20230908205945-e89ba86370e0 // indirect
+	github.com/openagent-md/pretty v0.0.0-20230908205945-e89ba86370e0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/coder/boundary/config"
+	"github.com/openagent-md/boundary/config"
 )
 
 func isChild() bool {

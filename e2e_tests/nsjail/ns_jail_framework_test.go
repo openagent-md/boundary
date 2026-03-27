@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coder/boundary/config"
-	"github.com/coder/boundary/e2e_tests/util"
+	"github.com/openagent-md/boundary/config"
+	"github.com/openagent-md/boundary/e2e_tests/util"
 	"github.com/stretchr/testify/require"
 )
 

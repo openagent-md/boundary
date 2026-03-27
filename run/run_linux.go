@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/coder/boundary/config"
-	"github.com/coder/boundary/landjail"
-	"github.com/coder/boundary/nsjail_manager"
+	"github.com/openagent-md/boundary/config"
+	"github.com/openagent-md/boundary/landjail"
+	"github.com/openagent-md/boundary/nsjail_manager"
 )
 
 func Run(ctx context.Context, logger *slog.Logger, cfg config.AppConfig) error {

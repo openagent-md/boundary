@@ -18,8 +18,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/coder/boundary/audit"
-	"github.com/coder/boundary/rulesengine"
+	"github.com/openagent-md/boundary/audit"
+	"github.com/openagent-md/boundary/rulesengine"
 )
 
 // Server handles HTTP and HTTPS requests with rule-based filtering
