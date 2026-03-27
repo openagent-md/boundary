@@ -15,7 +15,7 @@ require (
 )
 
 require (
-	cdr.dev/slog/v3 v3.0.0-rc1 // indirect
+	dev.latticeruntime.com/slog/v3 v3.0.1-rc1 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
